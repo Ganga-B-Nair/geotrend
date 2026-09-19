@@ -43,12 +43,20 @@ Five of six research questions run entirely on real data. One synthetic componen
 python -m src.data.load_real --raw data/raw/Melbourne_housing_FULL.csv
 ```
 
-Confirmed on the source (September 2026): ~34.8k rows, `Price` 22% missing,
-`BuildingArea` 61% missing, `YearBuilt` 55% missing. The project uses a
-**two-track sample design** — clustering on the larger Price-valid sample
-(~27.2k) because DBSCAN is density-based, and all downstream analysis on the
-complete-case subset (~11–13k), which inherits cluster labels geographically.
-The complete-case subset is tested for representativeness before use.
+Measured on the downloaded file (19 September 2026): **34,857 rows over 27
+months** (2016-01-28 to 2018-03-17). Price is missing for 7,610 rows,
+coordinates for 7,976, and building area for 21,115.
+
+The project uses a **two-track sample design**: clustering runs on the 20,993
+rows with valid price *and* coordinates, because DBSCAN is density-based and a
+better-populated sample yields a better estimate of neighbourhood structure;
+everything downstream runs on the 10,647-row complete-case subset, which
+inherits cluster labels geographically. That subset is tested for
+representativeness against the dropped rows before it is used.
+
+Notably, the price and coordinate gaps overlap in only 1,722 rows — they are
+two distinct missingness mechanisms rather than one pattern of incomplete
+records, and Notebook 02 treats them separately.
 
 The loader normalises the source to an internal schema so every notebook reads the same column names. It handles the source file's misspelled `Lattitude` / `Longtitude` columns; **do not fix the CSV by hand** — leaving the download untouched is what makes the pipeline reproducible for anyone who re-downloads it.
 
