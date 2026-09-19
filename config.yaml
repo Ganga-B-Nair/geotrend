@@ -1,0 +1,134 @@
+project: terra          # umbrella project name (report, submission)
+component: geotrend     # the pipeline + app component (this repo)
+design: hybrid          # real base data + synthetic event overlay (RQ5 only)
+
+paths:
+  # REAL data -- the base for every research question
+  raw_real: data/raw/housing_real.csv
+  fixture: data/raw/_fixture.csv          # offline stand-in, testing only
+  processed: data/processed/clean.parquet
+  features: data/processed/features.parquet
+  clustered: data/processed/clustered.parquet
+
+  # SYNTHETIC overlay -- Notebook 06 only
+  augmented: data/processed/augmented.parquet
+  overlay_manifest: data/processed/overlay_manifest.json
+
+  model: models/xgb_price.pkl
+  figures: reports/figures
+
+source:
+  name: Melbourne Housing Market
+  url: https://www.kaggle.com/datasets/dansbecker/melbourne-housing-snapshot
+  file: Melbourne_housing_FULL.csv
+  # Use the FULL release, not the snapshot. Same 21 columns, but the snapshot
+  # spans only ~20 months (2016-01 to 2017-09), which is below the 24 months
+  # seasonal_decompose needs for two complete annual cycles.
+  note: >
+    Coordinate columns are misspelled Lattitude/Longtitude in the source CSV.
+    The loader handles both spellings; do not edit the downloaded file.
+
+# ---------------------------------------------------------------------------
+# TWO-TRACK SAMPLE DESIGN
+# Melbourne FULL: ~34.8k rows. Price 22% missing, BuildingArea 61% missing,
+# YearBuilt 55% missing (verified on Kaggle, 2026-09).
+#
+#   cluster_sample : rows with valid Price + coordinates       (~27.2k)
+#                    used for Moran's I and DBSCAN. DBSCAN is a DENSITY
+#                    algorithm -- dropping 60% of points degrades the
+#                    neighbourhood structure it finds. Methodological
+#                    reason, not convenience.
+#   analysis_sample: rows also having valid BuildingArea        (~11-13k)
+#                    used for price-per-sqft, trends, DiD, XGBoost.
+#                    Inherits cluster membership from the step above
+#                    (cluster assignment is geographic).
+#
+# MANDATORY: prove analysis_sample is representative of cluster_sample
+# before using it. See representativeness_tests below.
+# ---------------------------------------------------------------------------
+samples:
+  cluster_sample:
+    require: [price, latitude, longitude]
+  analysis_sample:
+    require: [price, latitude, longitude, area_sqft]
+
+representativeness_tests:
+  suburb_mix: chi2            # are suburbs represented in the same proportions?
+  price_distribution: ks      # Kolmogorov-Smirnov, kept vs dropped
+  date_distribution: ks       # is missingness concentrated in certain months?
+  alpha: 0.05
+  # A significant result is NOT a failure -- it is a limitation to report.
+  # Failing to run the test is the failure.
+
+data_quality:
+  min_price: 100000
+  max_price: 9000000
+  min_area_sqft: 250
+  max_area_sqft: 10000
+  # Impossible values confirmed present in the source data:
+  #   YearBuilt min 1196  -> Melbourne founded 1835; likely typo for 1996
+  #   YearBuilt max 2106  -> 90 years after data ends; likely 2006 or 2016
+  #   BuildingArea min 0  -> a building with no floor area does not exist
+  #   BuildingArea max 44500 sqm -> 327x the median of 136
+  min_year_built: 1835               # Melbourne's founding
+  max_year_built: 2018               # last year in the dataset
+  min_building_area_sqm: 10
+  max_building_area_sqm: 2000
+  drop_missing_coords: true          # cannot cluster what you cannot place
+  drop_duplicate_listings: true
+
+spatial:
+  moran:
+    k_neighbors: 8
+    permutations: 999
+  dbscan:
+    eps_km: null          # SET THIS FROM THE K-DISTANCE ELBOW IN NB04
+    min_samples: 40
+    scale_price: true     # cluster on (lat, lon, log price per sqft)
+  min_cluster_size_for_analysis: 30
+
+timeseries:
+  freq: MS
+  decomposition: additive
+  adf_alpha: 0.05
+  forecast_horizon: 6
+  model: arima
+  min_months_for_decomposition: 24
+
+overlay:
+  # The one synthetic component. Applied AFTER clustering, never before.
+  n_events: 3
+  n_controls_each: 2
+  noise_sd: 0.0           # headline run; re-run at 0.05 as robustness
+  seed: 42
+  # Ramps are SHORT on purpose. The Melbourne window is ~26 months and every
+  # ramp month is excluded from DiD estimation, so a long ramp buys realism
+  # at the cost of identification. default_events() refuses to place an event
+  # that leaves < 6 pre or < 6 post-ramp months.
+  min_pre_months: 6
+  min_post_months: 6
+  events:                 # defaults; override once you see real clusters
+    - kind: mall
+      effect: 0.115
+      ramp_months: 4
+    - kind: park
+      effect: 0.045
+      ramp_months: 3
+    - kind: transit
+      effect: 0.150
+      ramp_months: 4
+
+causal:
+  event_window_pre: 12
+  event_window_post: 12
+  ramp_exclusion: true    # drop the ramp window from DiD estimation
+  se_method: wild_bootstrap   # cluster-robust SEs are unreliable at this N
+  bootstrap_reps: 999
+  placebo_shift_months: -12
+
+model:
+  target: log_price_per_sqft
+  price_column: price     # REAL prices -- never price_augmented
+  test_size: 0.2
+  split: temporal         # temporal split, NOT random -- avoids leakage
+  random_state: 42

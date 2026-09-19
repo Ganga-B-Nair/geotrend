@@ -1,0 +1,27 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.env
+.DS_Store
+
+# The real source CSV is not redistributed -- README says where to get it.
+data/raw/Melbourne_housing*.csv
+data/raw/housing_real.csv
+
+# Offline test fixture is regenerable; never a result.
+data/raw/_fixture.csv
+
+# Derived artefacts are regenerable from the notebooks.
+data/processed/*.parquet
+data/external/*.json
+models/*.pkl
+!models/.gitkeep
+
+# BUT keep the overlay manifest: it is ground truth for the recovery table
+# and must be versioned alongside the results it scores.
+!data/processed/overlay_manifest.json
+
+.streamlit/secrets.toml

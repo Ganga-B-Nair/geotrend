@@ -1,0 +1,37 @@
+# --- core ---
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.13.1
+pyyaml==6.0.1
+
+# --- geospatial ---
+geopandas==0.14.4
+shapely==2.0.4
+folium==0.16.0
+esda==2.5.1
+libpysal==4.9.2
+
+# --- time series ---
+statsmodels==0.14.2
+prophet==1.1.5
+
+# --- modelling / xai ---
+scikit-learn==1.4.2
+xgboost==2.0.3
+shap==0.45.1
+joblib==1.4.2
+
+# --- viz ---
+matplotlib==3.8.4
+seaborn==0.13.2
+plotly==5.22.0
+
+# --- serving ---
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+streamlit==1.35.0
+
+# --- dev ---
+jupyter==1.0.0
+pytest==8.2.2
